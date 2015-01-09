@@ -1,0 +1,130 @@
+---
+title: "Practical Machine Learning - Course Project"
+output: pdf_document
+---
+
+<!--
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+### Data 
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+What you should submit
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+1. Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2. You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
+
+### Reproducibility 
+
+Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis. 
+
+Please upload a link to the github repository containing your Rmd and compiled HTML file performing your analysis. 
+BI Link<code>MathPreviewEdit: Rich
+
+### Evaluation/feedback on the above work
+
+Has the student submitted a github repo?
+
+Does the submission build a machine learning algorithm to predict activity quality from activity monitors?
+
+Do the authors describe what they expect the out of sample error to be and estimate the error appropriately with cross-validation?
+
+# Solution
+-->
+
+<!--
+## Data exploration
+-->
+
+The training dataset contains about 20000 observations and 160 variables, most of them numerical. We remove observation id, date and time stamps, as well as all variables which have a lot of missing values. This leaves us with 53 predictors and the outcome variable. We clean the test dataset removing the same variables as for the training dataset.
+
+<!-- ### Read and clean training dataset -->
+
+```{r}
+data.train = read.csv("D:/Courses/Coursera/Data Science - Practical Machine Learning/pml-training.csv", na.strings = c("NA","#DIV/0!"))
+data.numeric <- data.train[,sapply(data.train,function(x) is.numeric(x))]
+data.count.na <- sapply(data.numeric, function(x) sum(is.na(x)))
+data.no.na <- data.numeric[,data.count.na==0]
+data.train.clean <- data.no.na[,5:56]
+data.train.clean$user <- factor(data.train$user_name)
+data.train.clean$classe <- factor(data.train$classe)
+```
+
+<!-- ### Read and clean test dataset in the same way as training dataset -->
+
+```{r}
+data.test = read.csv("D:/Courses/Coursera/Data Science - Practical Machine Learning/pml-testing.csv")
+data.test.numeric <- data.test[,sapply(data.train,function(x) is.numeric(x))]
+data.test.no.na <- data.test.numeric[,data.count.na==0]
+data.test.clean <- data.test.no.na[,5:56]
+data.test.clean$user <- factor(data.test$user_name)
+data.test <- data.test.clean
+```
+
+<!-- ### Partition into training and validation dataset -->
+
+Crossvalidation will be done as follows: The training dataset will be split into two parts. The first part is the training dataset for the model, using 60% of the observations. The second part is for validation of the model and estimating the out-of-sample error, using 40% of the observations.
+
+```{r,warning=FALSE,message=FALSE}
+library(caret)
+data.partition <- createDataPartition(y=data.train.clean$classe,p=0.60,list=FALSE)
+data.valid <- data.train.clean[-data.partition,]
+data.train <- data.train.clean[data.partition,]
+```
+
+<!-- ### Inspect variables -->
+
+We have a look at the distribution of the first 9 variables to get an idea of the data.
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+library(ggplot2)
+library(reshape2)
+ggplot(melt(data.train[,c(1:9,54)],id.vars="classe"), aes(value,colour=classe)) + geom_density() + facet_wrap(~variable,scales = "free")
+##ggplot(melt(data.train[,c(10:18,54)],id.vars="classe"), aes(value,colour=classe)) + geom_density() + facet_wrap(~variable,scales = "free")
+##ggplot(melt(data.train[,c(19:27,54)],id.vars="classe"), aes(value,colour=classe)) + geom_density() + facet_wrap(~variable,scales = "free")
+##ggplot(melt(data.train[,c(28:36,54)],id.vars="classe"), aes(value,colour=classe)) + geom_density() + facet_wrap(~variable,scales = "free")
+##ggplot(melt(data.train[,c(37:45,54)],id.vars="classe"), aes(value,colour=classe)) + geom_density() + facet_wrap(~variable,scales = "free")
+##ggplot(melt(data.train[,c(46:52,54)],id.vars="classe"), aes(value,colour=classe)) + geom_density() + facet_wrap(~variable,scales = "free")
+```
+
+<!-- ### Plot correlations matrix
+```{r}
+cor.plot <- round(cor(data.train[1:52]),2)
+cor.plot <- melt(cor.plot)
+cor.plot$col <- factor(cor.plot$value>0.75)
+names(cor.plot) <- c("x1","x2","value","col")
+qplot(x1,x2,fill=value,data=cor.plot,geom="tile")
+```
+-->
+
+<!-- ### Prediction models -->
+
+We build a random forest prediction model on the training data set. Then we predict the outcome on both the training and the validation dataset and compute accuracies for both.
+
+```{r,message=FALSE,warning=FALSE}
+library(randomForest)
+fit.rf <- randomForest(y=data.train$classe, x=data.train[,1:52], ntree=100)
+pred.train <- predict(fit.rf, newdata=data.train[,1:52])
+pred.valid <- predict(fit.rf, newdata=data.valid[,1:52])
+acc.train <- sum(pred.train == data.train$classe)/length(data.train$classe)
+acc.valid <- sum(pred.valid == data.valid$classe)/length(data.valid$classe)
+acc.train
+acc.valid
+```
+
+The accuracy on the training dataset is 100%. That indicates that we might be overfitting. The out-of-sample error for the model is computed as the accuracy on the validation dataset. The accuracy on the validation dataset is 99%, so the expected out-of-sample error is 1% and we do not seem to be overfitting.
